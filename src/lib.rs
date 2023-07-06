@@ -316,3 +316,70 @@ impl<T> MyVec<T> {
 
 unsafe impl<T: Send> Send for MyVec<T> {}
 unsafe impl<T: Sync> Sync for MyVec<T> {}
+
+#[test]
+fn create_push_pop() {
+    let mut v = MyVec::new();
+    v.push(1);
+    assert_eq!(1, v.len());
+    assert_eq!(1, v[0]);
+    for i in v.iter_mut() {
+        *i += 1;
+    }
+    v.insert(0, 5);
+    let x = v.pop();
+    assert_eq!(Some(2), x);
+    assert_eq!(1, v.len());
+    v.push(10);
+    let x = v.remove(0);
+    assert_eq!(5, x);
+    assert_eq!(1, v.len());
+}
+
+#[test]
+fn iter_test() {
+    let mut v = MyVec::new();
+    for i in 0..10 {
+        v.push(Box::new(i))
+    }
+    let mut iter = v.into_iter();
+    let first = iter.next().unwrap();
+    let last = iter.next_back().unwrap();
+    drop(iter);
+    assert_eq!(0, *first);
+    assert_eq!(9, *last);
+}
+
+#[test]
+fn test_drain() {
+    let mut v = MyVec::new();
+    for i in 0..10 {
+        v.push(Box::new(i))
+    }
+    {
+        let mut drain = v.drain();
+        let first = drain.next().unwrap();
+        let last = drain.next_back().unwrap();
+        assert_eq!(0, *first);
+        assert_eq!(9, *last);
+    }
+    assert_eq!(0, v.len());
+    v.push(Box::new(1));
+    assert_eq!(1, *v.pop().unwrap());
+}
+
+#[test]
+fn test_zst() {
+    let mut v = MyVec::new();
+    for _i in 0..10 {
+        v.push(())
+    }
+
+    let mut count = 0;
+
+    for _ in v.into_iter() {
+        count += 1
+    }
+
+    assert_eq!(10, count);
+}
