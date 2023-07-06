@@ -12,13 +12,21 @@ struct RawVec<T> {
 
 impl<T> RawVec<T> {
     fn new() -> Self {
+        let cap = if mem::size_of::<T>() == 0 {
+            usize::MAX
+        } else {
+            0
+        };
+
         Self {
             ptr: NonNull::dangling(),
-            cap: 0,
+            cap,
         }
     }
 
     fn grow(&mut self) {
+        assert!(mem::size_of::<T>() != 0, "capacity overflow");
+
         let (new_cap, new_layout) = if self.cap == 0 {
             (1, Layout::array::<T>(1).unwrap())
         } else {
@@ -50,7 +58,9 @@ impl<T> RawVec<T> {
 
 impl<T> Drop for RawVec<T> {
     fn drop(&mut self) {
-        if self.cap != 0 {
+        let elem_size = mem::size_of::<T>();
+
+        if self.cap != 0 && elem_size != 0 {
             let ptr = self.ptr.as_ptr() as *mut u8;
             let layout = Layout::array::<T>(self.cap).unwrap();
 
