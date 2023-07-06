@@ -249,5 +249,49 @@ impl<T> DerefMut for MyVec<T> {
     }
 }
 
+use std::marker::PhantomData;
+
+pub struct MyDrain<'a, T: 'a> {
+    vec: PhantomData<&'a mut MyVec<T>>,
+    iter: RawValIter<T>,
+}
+
+impl<'a, T> Iterator for MyDrain<'a, T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
+}
+
+impl<'a, T> DoubleEndedIterator for MyDrain<'a, T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.iter.next_back()
+    }
+}
+
+impl<'a, T> Drop for MyDrain<'a, T> {
+    fn drop(&mut self) {
+        for _ in &mut *self {}
+    }
+}
+
+impl<T> MyVec<T> {
+    pub fn drain(&mut self) -> MyDrain<T> {
+        let iter = unsafe { RawValIter::new(&self) };
+
+        self.len = 0;
+
+        MyDrain {
+            vec: PhantomData,
+            iter,
+        }
+    }
+}
+
 unsafe impl<T: Send> Send for MyVec<T> {}
 unsafe impl<T: Sync> Sync for MyVec<T> {}
