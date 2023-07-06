@@ -1,5 +1,9 @@
 use std::alloc::{self, Layout};
+use std::marker::PhantomData;
+use std::mem;
+use std::ops::{Deref, DerefMut};
 use std::ptr::{self, NonNull};
+use std::slice;
 
 struct RawVec<T> {
     ptr: NonNull<T>,
@@ -188,8 +192,6 @@ impl<T> DoubleEndedIterator for RawValIter<T> {
     }
 }
 
-use std::mem;
-
 pub struct MyVecIterator<T> {
     _buf: RawVec<T>, // just to own and drop
     iter: RawValIter<T>,
@@ -232,9 +234,6 @@ impl<T> Drop for MyVecIterator<T> {
     }
 }
 
-use std::ops::{Deref, DerefMut};
-use std::slice;
-
 impl<T> Deref for MyVec<T> {
     type Target = [T];
 
@@ -248,8 +247,6 @@ impl<T> DerefMut for MyVec<T> {
         unsafe { slice::from_raw_parts_mut(self.ptr(), self.len) }
     }
 }
-
-use std::marker::PhantomData;
 
 pub struct MyDrain<'a, T: 'a> {
     vec: PhantomData<&'a mut MyVec<T>>,
