@@ -136,36 +136,25 @@ impl<T> Drop for MyVec<T> {
     }
 }
 
-use std::mem;
-
-pub struct MyVecIterator<T> {
-    _buf: RawVec<T>, // just to own and drop
+struct RawValIter<T> {
     start: *const T,
     end: *const T,
 }
 
-impl<T> IntoIterator for MyVec<T> {
-    type Item = T;
-    type IntoIter = MyVecIterator<T>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        let buf = unsafe { ptr::read(&self.buf) };
-        let len = self.len;
-        mem::forget(self);
-
-        MyVecIterator {
-            start: buf.ptr.as_ptr(),
-            end: if buf.cap == 0 {
-                buf.ptr.as_ptr()
+impl<T> RawValIter<T> {
+    unsafe fn new(slice: &[T]) -> Self {
+        Self {
+            start: slice.as_ptr(),
+            end: if slice.len() == 0 {
+                slice.as_ptr()
             } else {
-                unsafe { buf.ptr.as_ptr().add(len) }
+                slice.as_ptr().add(slice.len())
             },
-            _buf: buf,
         }
     }
 }
 
-impl<T> Iterator for MyVecIterator<T> {
+impl<T> Iterator for RawValIter<T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -186,7 +175,7 @@ impl<T> Iterator for MyVecIterator<T> {
     }
 }
 
-impl<T> DoubleEndedIterator for MyVecIterator<T> {
+impl<T> DoubleEndedIterator for RawValIter<T> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.start == self.end {
             None
@@ -196,6 +185,44 @@ impl<T> DoubleEndedIterator for MyVecIterator<T> {
                 Some(ptr::read(self.end))
             }
         }
+    }
+}
+
+use std::mem;
+
+pub struct MyVecIterator<T> {
+    _buf: RawVec<T>, // just to own and drop
+    iter: RawValIter<T>,
+}
+
+impl<T> IntoIterator for MyVec<T> {
+    type Item = T;
+    type IntoIter = MyVecIterator<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let (iter, buf) = unsafe { (RawValIter::new(&self), ptr::read(&self.buf)) };
+
+        mem::forget(self);
+
+        MyVecIterator { iter, _buf: buf }
+    }
+}
+
+impl<T> Iterator for MyVecIterator<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
+}
+
+impl<T> DoubleEndedIterator for MyVecIterator<T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.iter.next_back()
     }
 }
 
