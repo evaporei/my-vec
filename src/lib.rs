@@ -91,5 +91,16 @@ impl<T> Drop for MyVec<T> {
     }
 }
 
+use std::ops::Deref;
+use std::slice;
+
+impl<T> Deref for MyVec<T> {
+    type Target = [T];
+
+    fn deref(&self) -> &[T] {
+        unsafe { slice::from_raw_parts(self.ptr.as_ptr(), self.len) }
+    }
+}
+
 unsafe impl<T: Send> Send for MyVec<T> {}
 unsafe impl<T: Sync> Sync for MyVec<T> {}
