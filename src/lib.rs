@@ -183,6 +183,19 @@ impl<T> Iterator for MyVecIterator<T> {
     }
 }
 
+impl<T> DoubleEndedIterator for MyVecIterator<T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.start == self.end {
+            None
+        } else {
+            unsafe {
+                self.end = self.end.offset(-1);
+                Some(ptr::read(self.end))
+            }
+        }
+    }
+}
+
 use std::ops::{Deref, DerefMut};
 use std::slice;
 
