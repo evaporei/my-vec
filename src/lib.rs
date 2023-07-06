@@ -76,6 +76,26 @@ impl<T> MyVec<T> {
             unsafe { Some(ptr::read(self.ptr.as_ptr().add(self.len))) }
         }
     }
+
+    pub fn insert(&mut self, idx: usize, elem: T) {
+        assert!(idx <= self.len, "index out of bounds");
+
+        if self.len == self.cap {
+            self.grow()
+        }
+
+        unsafe {
+            ptr::copy(
+                self.ptr.as_ptr().add(idx),
+                self.ptr.as_ptr().add(idx + 1),
+                self.len - idx,
+            );
+
+            ptr::write(self.ptr.as_ptr().add(idx), elem);
+        }
+
+        self.len += 1;
+    }
 }
 
 impl<T> Drop for MyVec<T> {
