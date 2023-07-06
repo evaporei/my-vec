@@ -91,7 +91,7 @@ impl<T> Drop for MyVec<T> {
     }
 }
 
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::slice;
 
 impl<T> Deref for MyVec<T> {
@@ -99,6 +99,12 @@ impl<T> Deref for MyVec<T> {
 
     fn deref(&self) -> &[T] {
         unsafe { slice::from_raw_parts(self.ptr.as_ptr(), self.len) }
+    }
+}
+
+impl<T> DerefMut for MyVec<T> {
+    fn deref_mut(&mut self) -> &mut [T] {
+        unsafe { slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len) }
     }
 }
 
