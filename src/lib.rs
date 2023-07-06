@@ -129,6 +129,60 @@ impl<T> Drop for MyVec<T> {
     }
 }
 
+use std::mem::{self, ManuallyDrop};
+
+pub struct MyVecIterator<T> {
+    buf: NonNull<T>,
+    cap: usize,
+    start: *const T,
+    end: *const T,
+}
+
+impl<T> IntoIterator for MyVec<T> {
+    type Item = T;
+    type IntoIter = MyVecIterator<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let vec = ManuallyDrop::new(self);
+
+        let ptr = vec.ptr;
+        let cap = vec.cap;
+        let len = vec.len;
+
+        MyVecIterator {
+            buf: ptr,
+            cap,
+            start: ptr.as_ptr(),
+            end: if cap == 0 {
+                ptr.as_ptr()
+            } else {
+                unsafe { ptr.as_ptr().add(len) }
+            },
+        }
+    }
+}
+
+impl<T> Iterator for MyVecIterator<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.start == self.end {
+            None
+        } else {
+            unsafe {
+                let elem = ptr::read(self.start);
+                self.start = self.start.offset(1);
+                Some(elem)
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = (self.end as usize - self.start as usize) / mem::size_of::<T>();
+        (len, Some(len))
+    }
+}
+
 use std::ops::{Deref, DerefMut};
 use std::slice;
 
