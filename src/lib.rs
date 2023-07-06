@@ -96,6 +96,24 @@ impl<T> MyVec<T> {
 
         self.len += 1;
     }
+
+    pub fn remove(&mut self, idx: usize) -> T {
+        assert!(idx < self.len, "index out of bounds");
+
+        self.len -= 1;
+
+        unsafe {
+            let elem = ptr::read(self.ptr.as_ptr().add(idx));
+
+            ptr::copy(
+                self.ptr.as_ptr().add(idx + 1),
+                self.ptr.as_ptr().add(idx),
+                self.len - idx,
+            );
+
+            elem
+        }
+    }
 }
 
 impl<T> Drop for MyVec<T> {
