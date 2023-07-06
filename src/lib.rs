@@ -67,6 +67,15 @@ impl<T> MyVec<T> {
 
         self.len += 1;
     }
+
+    pub fn pop(&mut self) -> Option<T> {
+        if self.len == 0 {
+            None
+        } else {
+            self.len -= 1;
+            unsafe { Some(ptr::read(self.ptr.as_ptr().add(self.len))) }
+        }
+    }
 }
 
 unsafe impl<T: Send> Send for MyVec<T> {}
