@@ -1,5 +1,5 @@
 use std::alloc::{self, Layout};
-use std::ptr::NonNull;
+use std::ptr::{self, NonNull};
 
 pub struct MyVec<T> {
     ptr: NonNull<T>,
@@ -54,6 +54,18 @@ impl<T> MyVec<T> {
         // };
 
         self.cap = new_cap;
+    }
+
+    pub fn push(&mut self, elem: T) {
+        if self.len == self.cap {
+            self.grow()
+        }
+
+        unsafe {
+            ptr::write(self.ptr.as_ptr().add(self.len), elem);
+        }
+
+        self.len += 1;
     }
 }
 
