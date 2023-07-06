@@ -196,6 +196,17 @@ impl<T> DoubleEndedIterator for MyVecIterator<T> {
     }
 }
 
+impl<T> Drop for MyVecIterator<T> {
+    fn drop(&mut self) {
+        if self.cap != 0 {
+            for _ in &mut *self {}
+            let ptr = self.buf.as_ptr() as *mut u8;
+            let layout = Layout::array::<T>(self.cap).unwrap();
+            unsafe { alloc::dealloc(ptr, layout) }
+        }
+    }
+}
+
 use std::ops::{Deref, DerefMut};
 use std::slice;
 
