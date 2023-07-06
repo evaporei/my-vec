@@ -1,18 +1,16 @@
 use std::alloc::{self, Layout};
 use std::ptr::{self, NonNull};
 
-pub struct MyVec<T> {
+struct RawVec<T> {
     ptr: NonNull<T>,
     cap: usize,
-    len: usize,
 }
 
-impl<T> MyVec<T> {
-    pub fn new() -> Self {
-        MyVec {
+impl<T> RawVec<T> {
+    fn new() -> Self {
+        Self {
             ptr: NonNull::dangling(),
             cap: 0,
-            len: 0,
         }
     }
 
@@ -42,27 +40,53 @@ impl<T> MyVec<T> {
         self.ptr = NonNull::new(new_ptr as *mut T)
             .unwrap_or_else(|| alloc::handle_alloc_error(new_layout));
 
-        // self.ptr = match NonNull::new(new_ptr as *mut T) {
-        //     Some(p) => p,
-        //     None => alloc::handle_alloc_error(new_layout),
-        // };
-
-        // self.ptr = if !new_ptr.is_null() {
-        //     NonNull::new(new_ptr as *mut T).unwrap()
-        // } else {
-        //     alloc::handle_alloc_error(new_layout)
-        // };
-
         self.cap = new_cap;
+    }
+}
+
+impl<T> Drop for RawVec<T> {
+    fn drop(&mut self) {
+        if self.cap != 0 {
+            let ptr = self.ptr.as_ptr() as *mut u8;
+            let layout = Layout::array::<T>(self.cap).unwrap();
+
+            unsafe { alloc::dealloc(ptr, layout) }
+        }
+    }
+}
+
+pub struct MyVec<T> {
+    buf: RawVec<T>,
+    len: usize,
+}
+
+impl<T> MyVec<T> {
+    pub fn new() -> Self {
+        MyVec {
+            buf: RawVec::new(),
+            len: 0,
+        }
+    }
+
+    fn grow(&mut self) {
+        if self.len == self.cap() {
+            self.buf.grow();
+        }
+    }
+
+    fn ptr(&self) -> *mut T {
+        self.buf.ptr.as_ptr()
+    }
+
+    fn cap(&self) -> usize {
+        self.buf.cap
     }
 
     pub fn push(&mut self, elem: T) {
-        if self.len == self.cap {
-            self.grow()
-        }
+        self.grow();
 
         unsafe {
-            ptr::write(self.ptr.as_ptr().add(self.len), elem);
+            ptr::write(self.ptr().add(self.len), elem);
         }
 
         self.len += 1;
@@ -73,25 +97,19 @@ impl<T> MyVec<T> {
             None
         } else {
             self.len -= 1;
-            unsafe { Some(ptr::read(self.ptr.as_ptr().add(self.len))) }
+            unsafe { Some(ptr::read(self.ptr().add(self.len))) }
         }
     }
 
     pub fn insert(&mut self, idx: usize, elem: T) {
         assert!(idx <= self.len, "index out of bounds");
 
-        if self.len == self.cap {
-            self.grow()
-        }
+        self.grow();
 
         unsafe {
-            ptr::copy(
-                self.ptr.as_ptr().add(idx),
-                self.ptr.as_ptr().add(idx + 1),
-                self.len - idx,
-            );
+            ptr::copy(self.ptr().add(idx), self.ptr().add(idx + 1), self.len - idx);
 
-            ptr::write(self.ptr.as_ptr().add(idx), elem);
+            ptr::write(self.ptr().add(idx), elem);
         }
 
         self.len += 1;
@@ -103,13 +121,9 @@ impl<T> MyVec<T> {
         self.len -= 1;
 
         unsafe {
-            let elem = ptr::read(self.ptr.as_ptr().add(idx));
+            let elem = ptr::read(self.ptr().add(idx));
 
-            ptr::copy(
-                self.ptr.as_ptr().add(idx + 1),
-                self.ptr.as_ptr().add(idx),
-                self.len - idx,
-            );
+            ptr::copy(self.ptr().add(idx + 1), self.ptr().add(idx), self.len - idx);
 
             elem
         }
@@ -118,22 +132,14 @@ impl<T> MyVec<T> {
 
 impl<T> Drop for MyVec<T> {
     fn drop(&mut self) {
-        if self.cap != 0 {
-            while let Some(_) = self.pop() {}
-
-            let ptr = self.ptr.as_ptr() as *mut u8;
-            let layout = Layout::array::<T>(self.cap).unwrap();
-
-            unsafe { alloc::dealloc(ptr, layout) }
-        }
+        while let Some(_) = self.pop() {}
     }
 }
 
-use std::mem::{self, ManuallyDrop};
+use std::mem;
 
 pub struct MyVecIterator<T> {
-    buf: NonNull<T>,
-    cap: usize,
+    _buf: RawVec<T>, // just to own and drop
     start: *const T,
     end: *const T,
 }
@@ -143,21 +149,18 @@ impl<T> IntoIterator for MyVec<T> {
     type IntoIter = MyVecIterator<T>;
 
     fn into_iter(self) -> Self::IntoIter {
-        let vec = ManuallyDrop::new(self);
-
-        let ptr = vec.ptr;
-        let cap = vec.cap;
-        let len = vec.len;
+        let buf = unsafe { ptr::read(&self.buf) };
+        let len = self.len;
+        mem::forget(self);
 
         MyVecIterator {
-            buf: ptr,
-            cap,
-            start: ptr.as_ptr(),
-            end: if cap == 0 {
-                ptr.as_ptr()
+            start: buf.ptr.as_ptr(),
+            end: if buf.cap == 0 {
+                buf.ptr.as_ptr()
             } else {
-                unsafe { ptr.as_ptr().add(len) }
+                unsafe { buf.ptr.as_ptr().add(len) }
             },
+            _buf: buf,
         }
     }
 }
@@ -198,12 +201,7 @@ impl<T> DoubleEndedIterator for MyVecIterator<T> {
 
 impl<T> Drop for MyVecIterator<T> {
     fn drop(&mut self) {
-        if self.cap != 0 {
-            for _ in &mut *self {}
-            let ptr = self.buf.as_ptr() as *mut u8;
-            let layout = Layout::array::<T>(self.cap).unwrap();
-            unsafe { alloc::dealloc(ptr, layout) }
-        }
+        for _ in &mut *self {}
     }
 }
 
@@ -214,13 +212,13 @@ impl<T> Deref for MyVec<T> {
     type Target = [T];
 
     fn deref(&self) -> &[T] {
-        unsafe { slice::from_raw_parts(self.ptr.as_ptr(), self.len) }
+        unsafe { slice::from_raw_parts(self.ptr(), self.len) }
     }
 }
 
 impl<T> DerefMut for MyVec<T> {
     fn deref_mut(&mut self) -> &mut [T] {
-        unsafe { slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len) }
+        unsafe { slice::from_raw_parts_mut(self.ptr(), self.len) }
     }
 }
 
